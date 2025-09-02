@@ -86,3 +86,36 @@ if __name__ == "__main__":
     # Generate text
     context = torch.zeros((1, 1), dtype=torch.long)
     print("Generated:", decode(generate(model, context, max_new_tokens=20)[0].tolist()))
+
+from train import train
+from utils import sample_logits
+import torch
+
+# Dummy dataset for now
+class TinyDataset:
+    def __init__(self, text="hello world"):
+        chars = sorted(list(set(text)))
+        self.stoi = {ch: i for i, ch in enumerate(chars)}
+        self.itos = {i: ch for ch, i in self.stoi.items()}
+        self.data = torch.tensor([self.stoi[c] for c in text], dtype=torch.long)
+
+    def get_batch(self, batch_size, block_size):
+        ix = torch.randint(len(self.data) - block_size, (batch_size,))
+        x = torch.stack([self.data[i:i+block_size] for i in ix])
+        y = torch.stack([self.data[i+1:i+block_size+1] for i in ix])
+        return x, y
+
+dataset = TinyDataset()
+model = train(dataset)
+
+# Sampling demo
+context = torch.zeros((1, 1), dtype=torch.long)  # start with 0
+device = next(model.parameters()).device
+
+for _ in range(50):
+    logits, _ = model(context[:, -64:])
+    next_id = sample_logits(logits[:, -1, :], temperature=0.8, top_k=10)
+    context = torch.cat([context, next_id], dim=1)
+
+print("Generated:", "".join(dataset.itos[i.item()] for i in context[0]))
+
